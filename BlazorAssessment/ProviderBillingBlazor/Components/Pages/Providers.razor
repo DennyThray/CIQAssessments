@@ -1,0 +1,189 @@
+@page "/"
+@rendermode InteractiveServer
+@using BillingData.DAL.Models
+@using BillingData.DAL.Services
+@inject ProviderService ProviderService
+@inject NavigationManager Nav
+
+<PageTitle>Provider Billing Explorer</PageTitle>
+
+<div class="container mt-4">
+    <header class="mb-4 border-bottom pb-2">
+        <h1 class="h3 mb-0">Provider Billing Explorer</h1>
+        <p class="text-muted">Explore Medicare billing data by provider</p>
+    </header>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <input type="text" class="form-control"
+                value="@searchTerm"
+                @oninput="OnSearchInput"
+                placeholder="Search by NPI or Name..." />
+    </div>
+        <div class="col-md-4">
+            <select class="form-select" @onchange="OnStateChanged">
+                <option value="">All States</option>
+                @foreach (var state in States)
+                {
+                    <option value="@state">@state</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-4">
+            <select class="form-select" @onchange="OnSpecialtyChanged">
+                <option value="">All Specialties</option>
+                @foreach (var specialty in Specialties)
+                {
+                    <option value="@specialty">@specialty</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    @if (FilteredProviders is null)
+    {
+        <p>Loading...</p>
+    }
+    else if (!FilteredProviders.Any())
+    {
+        <p>No results found.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>NPI</th>
+                        <th>Name</th>
+                        <th>Specialty</th>
+                        <th>State</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in FilteredProviders)
+                    {
+                        <tr @onclick="@(() => NavigateToProvider(p.NPI))" style="cursor: pointer;">
+                            <td>@p.NPI</td>
+                            <td>@p.ProviderName</td>
+                            <td>@p.Specialty</td>
+                            <td>@p.State</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-3">
+            <button class="btn btn-outline-secondary" @onclick="PrevPage" disabled="@(!CanGoPrev)">Previous</button>
+            <span>Page @CurrentPage of @TotalPages</span>
+            <button class="btn btn-outline-secondary" @onclick="NextPage" disabled="@(!CanGoNext)">Next</button>
+        </div>
+    }
+</div>
+
+@code {
+    private int CurrentPage = 1;
+    private const int PageSize = 100;
+
+    private int TotalCount;
+    private int TotalPages => (int)Math.Ceiling((double)TotalCount / PageSize);
+    private List<Provider> FilteredProviders = new();
+    private List<string> States = new();
+    private List<string> Specialties = new();
+
+    private string searchTerm = "";
+    private string selectedState = "";
+    private string selectedSpecialty = "";
+
+    private System.Timers.Timer? debounceTimer;
+    private const int DebounceDelay = 300;
+
+    private bool CanGoPrev => CurrentPage > 1;
+    private bool CanGoNext => CurrentPage < TotalPages;
+
+    protected override async Task OnInitializedAsync()
+    {
+        States = await ProviderService.GetDistinctStatesAsync();
+        Specialties = await ProviderService.GetDistinctSpecialtiesAsync();
+        await LoadFilteredProvidersAsync();
+    }
+
+    private async Task LoadFilteredProvidersAsync()
+    {
+        var (results, count) = await ProviderService.SearchProvidersAsync(
+            searchTerm, selectedState, selectedSpecialty, CurrentPage, PageSize
+        );
+
+        FilteredProviders = results;
+        TotalCount = count;
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? "";
+
+        debounceTimer?.Stop();
+        debounceTimer?.Dispose();
+
+        debounceTimer = new System.Timers.Timer(DebounceDelay);
+        debounceTimer.Elapsed += async (_, _) =>
+        {
+            debounceTimer?.Stop();
+            debounceTimer?.Dispose();
+            debounceTimer = null;
+
+            await InvokeAsync(async () =>
+            {
+                CurrentPage = 1;
+                await LoadFilteredProvidersAsync();
+                StateHasChanged();
+            });
+        };
+        debounceTimer.AutoReset = false;
+        debounceTimer.Start();
+    }
+
+    private async Task OnStateChanged(ChangeEventArgs e)
+    {
+        selectedState = e.Value?.ToString() ?? "";
+        CurrentPage = 1;
+        await ReloadAsync();
+    }
+
+    private async Task OnSpecialtyChanged(ChangeEventArgs e)
+    {
+        selectedSpecialty = e.Value?.ToString() ?? "";
+        CurrentPage = 1;
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadFilteredProvidersAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task PrevPage()
+    {
+        if (CanGoPrev)
+        {
+            CurrentPage--;
+            await LoadFilteredProvidersAsync();
+        }
+    }
+
+    private async Task NextPage()
+    {
+        if (CanGoNext)
+        {
+            CurrentPage++;
+            await LoadFilteredProvidersAsync();
+        }
+    }
+
+    private void NavigateToProvider(string npi)
+    {
+        Nav.NavigateTo($"/{npi}");
+    }
+}

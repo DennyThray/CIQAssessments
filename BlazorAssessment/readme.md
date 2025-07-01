@@ -1,150 +1,124 @@
-# 🧪 Blazor Interview Assignment
+# 🧪 Provider Billing Explorer
 
-### **Title:** _Provider Billing Explorer_
-
----
-
-## 📕 Background and Rationale
-
-At CompIQ, one of our primary responsibilities is ingesting data from disparate sources and displaying that data to our customers, both internal and external.
-
-This assessment tests your ability to ingest data, create efficient indexes on that data and display it to a potential customer. The best solutions will utilize common logic between the DataIngestionConsole and the ProviderBillingBlazor projects. You may add additional class libraries as needed.
-
-You should be able to complete this assessment in roughly 6 hours.
+A two-part coding assessment demonstrating data ingestion and interactive visualization of Medicare billing data using a .NET 8 Blazor Server app and a console ingestion tool.
 
 ---
 
-## 📩 Submission
+## 📂 Project Structure
 
-Fork this repository and submit a link to your completed fork via email.
-
----
-
-## 🧩 Part 1 – Data Ingestion (/DataIngestionConsole)
-
-### 🎯 Objective
-
-Write a standalone C# console app (or script) that:
-
-- Downloads and parses Medicare billing data
-- Creates a normalized **SQLite database**
-- Populates provider and billing tables efficiently
-
-### 📥 Dataset
-
-**Medicare Physician & Other Practitioners – by Provider and Service** (Just get the latest data - 3GB) 
-🔗 [https://data.cms.gov/provider-summary-by-type-of-service/medicare-physician-other-practitioners/medicare-physician-other-practitioners-by-provider-and-service](https://data.cms.gov/provider-summary-by-type-of-service/medicare-physician-other-practitioners/medicare-physician-other-practitioners-by-provider-and-service)
+```
+BlazorAssessment/
+├── BillingData.DAL/             # Shared EF Core data access layer
+├── DataIngestionConsole/       # Console app for parsing and loading CSV into SQLite
+├── ProviderBillingBlazor/      # Blazor Server UI project
+```
 
 ---
 
-### 🧱 Requirements
+## ⚙️ Prerequisites
 
-1. **Download & Parse CSV**
-    - Download the latest ZIP file containing the CSV
-    - Extract and parse the CSV file
-2. **Create SQLite Schema**  
-    Suggested structure:
-    ```sql
-    CREATE TABLE Provider (
-      NPI TEXT PRIMARY KEY,
-      ProviderName TEXT,
-      Specialty TEXT,
-      State TEXT
-    );
-    
-    CREATE TABLE BillingRecord (
-      Id INTEGER PRIMARY KEY AUTOINCREMENT,
-      NPI TEXT,
-      HCPCSCode TEXT,
-      HCPCSDescription TEXT,
-      PlaceOfService TEXT,
-      NumberOfServices INTEGER,
-      TotalMedicarePayment REAL,
-      FOREIGN KEY (NPI) REFERENCES Provider(NPI)
-    );
-    ```
-    
-3. **Populate Database**
-    - Insert all distinct providers first
-    - Insert billing records in bulk (efficient inserts are encouraged)
-    - Optional: add indexes on `NPI`, `Specialty`, `State`, `HCPCSCode`
+- [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
+- Visual Studio 2022+ or VS Code
 
 ---
 
-### ✅ Deliverables for Part 1
+## 🔄 Part 1: Data Ingestion Console
 
-- C# Console app or script (e.g., `.csproj`)    
-- README describing:
-    - How to run the script
-    - Any assumptions or transformations made
+### 🧾 What It Does
 
----
+- Reads a large Medicare billing CSV file
+- Normalizes it into two tables: `Provider` and `BillingRecord`
+- Bulk-inserts the data into a SQLite database
+- Outputs: `billing.db`
 
-## 🌐 Part 2 – Blazor Server App (/ProviderBillingBlazor)
+### ▶️ Running It
 
-### 🎯 Objective
+1. Place the `.csv` Medicare file inside:
 
-Use the SQLite database from Part 1 to create a **Blazor Server** app that allows users to explore provider billing data.
+   ```
+   /DataIngestionConsole/Input/
+   ```
 
----
+2. Build & run the console app:
 
-### 🧱 Requirements
+   ```bash
+   cd DataIngestionConsole
+   dotnet run
+   ```
 
-#### 1. **Provider List Page**
+3. Output database will be placed at:
 
-- Display: 
-    - NPI
-    - Name
-    - Specialty
-    - State
-    
-- Filters:
-    - Specialty (dropdown)
-    - State (dropdown)
-    
-- Search by NPI or Name (with debounced input)
-- Optional: paging or virtualization for large result sets
+   ```
+   /DataIngestionConsole/Output/billing.db
+   ```
 
-#### 2. **Provider Detail Page**
+4. Manually copy that file into:
 
-- Shows **top 10 HCPCS codes** by total Medicare payment
-- Display in a table:
-    - HCPCS Code
-    - Description
-    - Number of Services
-    - Total Medicare Payment
-    
-- Optional: Include a **bar chart** (e.g. ChartJs.Blazor) to visualize payments by HCPCS code
+   ```
+   /BillingData.DAL/Data/billing.db
+   ```
 
 ---
 
-### 💡 Optional Bonus Features
+## 🌐 Part 2: Blazor Server App
 
-- Filter detail view by **Place of Service**
-- Include **"Export to CSV"** button for current view
-- Show **national average** for selected HCPCS codes (across all providers)
-- Use EF-Core in a shared libary to handle the db operations
+### 🚀 What It Does
 
+- Lists Medicare providers with filtering, search, and paging
+- Shows provider billing details for top 10 HCPCS codes
+- Includes:
+  - Place of Service filtering
+  - Bar chart visualization using ApexCharts
+  - National average comparison
+  - CSV export
+
+### ▶️ Running It
+
+1. Make sure the database exists at:
+
+   ```
+   BillingData.DAL/Data/billing.db
+   ```
+
+2. (Optional) if already built, clean and build the app:
+
+   ```bash
+   cd ProviderBillingBlazor
+   dotnet clean
+   dotnet build
+   ```
+
+3. Launch the app:
+
+   ```bash
+   cd ProviderBillingBlazor
+   dotnet run
+   ```
+
+4. Visit:
+
+   ```
+   https://localhost:xxxx/
+   ```
 
 ---
 
-### 📦 Deliverables for Part 2
+## 📦 Features Implemented
 
-- Blazor Server app (`.NET 8`) 
-- README with:
-    - Setup instructions
-    - Navigation overview
-    - Any optional features implemented
+- [x] Data ingestion and normalization
+- [x] Blazor Server UI with filters and chart
+- [x] National average calculations (preloaded at startup)
+- [x] CSV export for provider detail
+- [x] Clean, modern responsive UI
+- [x] Shared DAL using EF Core
 
 ---
 
-### 🧪 Evaluation Criteria (Across Both Parts)
+## 💬 Assumptions & Notes
 
-| Category             | What to Look For                                        |
-| -------------------- | ------------------------------------------------------- |
-| **Data Engineering** | CSV handling, schema normalization, efficient ingestion |
-| **Blazor Skills**    | Component structure, routing, state handling            |
-| **Query Design**     | LINQ or SQL performance, filtering, grouping            |
-| **UI/UX**            | Usability, filter interactivity, responsive layout      |
-| **Code Quality**     | Clarity, modularity, appropriate abstraction            |
-| **Optional Extras**  | Charting, export, comparison logic                      |
+- Console app is standalone but requires manual copy of the database
+- No external libraries used for ingestion other than CsvHelper
+- National averages are computed once and stored in memory for performance
+- SQLite decimal ordering handled client-side for compatibility
+
+---

@@ -1,0 +1,174 @@
+@page "/{NPI}"
+@rendermode InteractiveServer
+@using BillingData.DAL.Models
+@using BillingData.DAL.Services
+@using ApexCharts
+@using System.Text
+@inject ProviderService ProviderService
+@inject NationalAveragesService AvgService
+@inject IJSRuntime JS
+
+<PageTitle>Provider Detail</PageTitle>
+
+<h3 class="mb-1">Provider Detail: @NPI</h3>
+<p class="text-muted mb-4">Top 10 HCPCS codes ranked by Medicare payment</p>
+
+@if (TopCodes is null)
+{
+    <p>Loading...</p>
+}
+else if (!TopCodes.Any())
+{
+    <p>No billing records found.</p>
+}
+else
+{
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <label class="form-label fw-semibold">Place of Service</label>
+            <select class="form-select" @onchange="OnPlaceOfServiceChanged">
+                <option value="">All Places of Service</option>
+                @foreach (var pos in PlacesOfService)
+                {
+                    var label = PlaceOfServiceLabels.TryGetValue(pos, out var desc) ? desc : pos;
+                    <option value="@pos">@label</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    <div class="table-responsive mb-4">
+        <table class="table table-striped table-hover table-bordered align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>HCPCS Code</th>
+                    <th>Description</th>
+                    <th class="text-end">Services</th>
+                    <th class="text-end">Total Medicare Payment</th>
+                    <th class="text-end">National Avg Payment</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in TopCodes)
+                {
+                    <tr>
+                        <td>@r.HCPCSCode</td>
+                        <td>@r.HCPCSDescription</td>
+                        <td class="text-end">@r.NumberOfServices</td>
+                        <td class="text-end fw-semibold">@r.TotalMedicarePayment.ToString("C")</td>
+                        <td class="text-end">@(
+                            r.NationalAverage.HasValue ? r.NationalAverage.Value.ToString("C") : "N/A")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="d-flex justify-content-end mb-3">
+        <button class="btn btn-sm btn-primary" @onclick="ExportToCsv">Export to CSV</button>
+    </div>
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span class="fw-semibold">Top 10 HCPCS Codes by Medicare Payment</span>
+        </div>
+        <div class="card-body">
+            <ApexChart Width="600" Height="300"
+                TItem="ChartData"
+                @ref="chartRef">
+                <ApexPointSeries TItem="ChartData"
+                    Items="ChartItems"
+                    Name="Provider"
+                    SeriesType="SeriesType.Bar"
+                    XValue="e => e.Code"
+                    YValue="e => e.ProviderPayment" />
+                <ApexPointSeries TItem="ChartData"
+                    Items="ChartItems"
+                    Name="National Avg"
+                    SeriesType="SeriesType.Bar"
+                    XValue="e => e.Code"
+                    YValue="e => e.NationalPayment" />
+            </ApexChart>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string NPI { get; set; } = "";
+
+    private List<BillingRecord> TopCodes = new();
+    private List<ChartData> ChartItems = new();
+    private List<string> PlacesOfService = new();
+    private string selectedPlaceOfService = "";
+    private ApexChart<ChartData>? chartRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        PlacesOfService = await ProviderService.GetDistinctPlacesOfServiceAsync(NPI);
+        await LoadTopCodesAsync();
+    }
+
+    private async Task OnPlaceOfServiceChanged(ChangeEventArgs e)
+    {
+        selectedPlaceOfService = e.Value?.ToString() ?? "";
+        await LoadTopCodesAsync();
+    }
+
+    private async Task LoadTopCodesAsync()
+    {
+        TopCodes = await ProviderService.GetTopBillingRecordsAsync(NPI, selectedPlaceOfService, AvgService);
+        UpdateChartItems();
+    }
+
+    private void UpdateChartItems()
+    {
+        ChartItems = TopCodes.Select(r => new ChartData
+        {
+            Code = r.HCPCSCode,
+            ProviderPayment = (int)Math.Round(r.TotalMedicarePayment),
+            NationalPayment = r.NationalAverage.HasValue ? (int)Math.Round(r.NationalAverage.Value) : 0
+        }).ToList();
+
+        _ = chartRef?.UpdateSeriesAsync();
+    }
+
+    private async Task ExportToCsv()
+    {
+        var csv = new StringBuilder();
+        csv.AppendLine("HCPCS Code,Description,Services,Total Medicare Payment,National Avg");
+
+        foreach (var r in TopCodes)
+        {
+            csv.AppendLine($"{Escape(r.HCPCSCode)},{Escape(r.HCPCSDescription)},{r.NumberOfServices},{r.TotalMedicarePayment},{r.NationalAverage}");
+        }
+
+        var bytes = Encoding.UTF8.GetBytes(csv.ToString());
+        var base64 = Convert.ToBase64String(bytes);
+        var filename = $"Provider_{NPI}_TopCodes.csv";
+
+        await JS.InvokeVoidAsync("downloadFileFromBlazor", filename, base64);
+    }
+
+    private static string Escape(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "\"\"";
+        value = value.Replace("\"", "\"\"");
+        return $"\"{value}\"";
+    }
+
+    private static readonly Dictionary<string, string> PlaceOfServiceLabels = new()
+    {
+        ["O"] = "Office",
+        ["F"] = "Facility",
+        ["H"] = "Home",
+        ["I"] = "Inpatient",
+        ["N"] = "Nursing Facility",
+        ["E"] = "Emergency Room",
+        ["T"] = "Telehealth"
+    };
+
+    public class ChartData
+    {
+        public string Code { get; set; } = "";
+        public int ProviderPayment { get; set; }
+        public int NationalPayment { get; set; }
+    }
+}
