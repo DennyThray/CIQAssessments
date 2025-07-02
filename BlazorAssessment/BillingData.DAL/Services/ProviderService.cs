@@ -7,9 +7,16 @@ namespace BillingData.DAL.Services;
 public class ProviderService
 {
     private readonly BillingContext _db;
+
     public ProviderService(BillingContext db) => _db = db;
 
-    public async Task<(List<Provider> Results, int TotalCount)> SearchProvidersAsync(string search, string state, string specialty, int page, int pageSize)
+    public async Task<(List<Provider> Results, int TotalCount)> SearchProvidersAsync(
+        string search,
+        string state,
+        string specialty,
+        int page,
+        int pageSize
+    )
     {
         var query = _db.Providers.AsNoTracking();
 
@@ -36,26 +43,24 @@ public class ProviderService
     }
 
     public Task<List<string>> GetDistinctStatesAsync() =>
-        _db.Providers.Select(p => p.State)
-            .Distinct()
-            .OrderBy(s => s)
-            .ToListAsync();
+        _db.Providers.Select(p => p.State).Distinct().OrderBy(s => s).ToListAsync();
 
     public Task<List<string>> GetDistinctSpecialtiesAsync() =>
-        _db.Providers.Select(p => p.Specialty)
-            .Distinct()
-            .OrderBy(s => s)
-            .ToListAsync();
+        _db.Providers.Select(p => p.Specialty).Distinct().OrderBy(s => s).ToListAsync();
 
     public Task<List<string>> GetDistinctPlacesOfServiceAsync(string npi) =>
-        _db.BillingRecords
-            .Where(b => b.NPI == npi)
+        _db
+            .BillingRecords.Where(b => b.NPI == npi)
             .Select(b => b.PlaceOfService)
             .Distinct()
             .OrderBy(x => x)
             .ToListAsync();
 
-    public async Task<List<BillingRecord>> GetTopBillingRecordsAsync(string npi, string? placeOfService, NationalAveragesService avgService)
+    public async Task<List<BillingRecord>> GetTopBillingRecordsAsync(
+        string npi,
+        string? placeOfService,
+        NationalAveragesService avgService
+    )
     {
         var query = _db.BillingRecords.Where(b => b.NPI == npi);
 
@@ -67,10 +72,7 @@ public class ProviderService
         // Work around SQLite's lack of decimal support in ORDER BY
         var records = await query.ToListAsync();
 
-        var top = records
-            .OrderByDescending(b => b.TotalMedicarePayment)
-            .Take(10)
-            .ToList();
+        var top = records.OrderByDescending(b => b.TotalMedicarePayment).Take(10).ToList();
 
         foreach (var r in top)
         {
